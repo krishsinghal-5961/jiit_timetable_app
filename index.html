@@ -534,13 +534,13 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             return timetableData;
         }
 
-        function parseClassString(classStr, selectedBatch) {
-            // Format: "L A15,A16(24B21EC212)-CR401/VRN"
+                function parseClassString(classStr, selectedBatch) {
+            // Format: "LA5,A6(CI121)- G2/DSR"
             // L = Lecture (T=Tutorial, P=Practical)
-            // A15,A16 = Batches
-            // (24B21EC212) = Subject Code
-            // CR401 = Classroom
-            // VRN = Teacher's Code
+            // A5,A6 = Batches
+            // (CI121) = Subject Code
+            // G2 = Classroom
+            // DSR = Teacher's Code
             
             const result = {
                 isRelevant: false,
@@ -555,39 +555,40 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 const originalStr = classStr;
                 console.log('Parsing class string:', originalStr);
 
-                // Step 1: Determine class type and remove prefix
-                if (classStr.startsWith('L ')) {
+                // Step 1: Determine class type from first character
+                if (classStr.startsWith('L')) {
                     result.type = 'Lecture';
-                    classStr = classStr.substring(2).trim();
-                } else if (classStr.startsWith('T ')) {
+                    classStr = classStr.substring(1).trim();
+                } else if (classStr.startsWith('T')) {
                     result.type = 'Tutorial';
-                    classStr = classStr.substring(2).trim();
-                } else if (classStr.startsWith('P ')) {
+                    classStr = classStr.substring(1).trim();
+                } else if (classStr.startsWith('P')) {
                     result.type = 'Practical';
-                    classStr = classStr.substring(2).trim();
+                    classStr = classStr.substring(1).trim();
                 } else {
                     // If no prefix, assume it's a lecture
                     result.type = 'Lecture';
                 }
 
                 // Step 2: Split by '-' to separate batch/subject from room/teacher
+                // Handle both "- " (with space) and "-" (without space)
                 const dashParts = classStr.split('-');
                 if (dashParts.length < 2) {
                     console.log('Invalid format - no dash separator');
                     return result;
                 }
 
-                const batchSubjectPart = dashParts[0].trim(); // "A15,A16(24B21EC212)"
-                const roomTeacherPart = dashParts[1].trim();  // "CR401/VRN"
+                const batchSubjectPart = dashParts[0].trim(); // "A5,A6(CI121)"
+                const roomTeacherPart = dashParts[1].trim();  // "G2/DSR"
 
                 // Step 3: Extract subject code (in parentheses)
                 const subjectMatch = batchSubjectPart.match(/\(([^)]+)\)/);
                 if (subjectMatch) {
-                    result.subject = subjectMatch[1]; // "24B21EC212"
+                    result.subject = subjectMatch[1]; // "CI121"
                 }
 
                 // Step 4: Extract batches (everything before parentheses)
-                const batchesStr = batchSubjectPart.replace(/\([^)]*\)/, '').trim(); // "A15,A16"
+                const batchesStr = batchSubjectPart.replace(/\([^)]*\)/, '').trim(); // "A5,A6"
                 
                 // Step 5: Check if this class is relevant for the selected batch
                 if (batchesStr.toUpperCase().includes('ABC') || 
@@ -608,8 +609,8 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 // Step 6: Extract room and teacher (split by '/')
                 if (roomTeacherPart.includes('/')) {
                     const [room, teacher] = roomTeacherPart.split('/');
-                    result.room = room.trim();    // "CR401"
-                    result.teacher = teacher.trim(); // "VRN"
+                    result.room = room.trim();    // "G2"
+                    result.teacher = teacher.trim(); // "DSR"
                 } else {
                     // If no teacher code, just room
                     result.room = roomTeacherPart.trim();
@@ -633,7 +634,6 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
             return result;
         }
-
         function displayTimetable(data, selectedBatch) {
             const content = document.getElementById('content');
             
