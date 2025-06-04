@@ -558,18 +558,15 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 console.log('Parsing class string:', originalStr);
 
                 // Step 1: Determine class type from first character
-                if (classStr.startsWith('L')) {
-                    result.type = 'Lecture';
-                    classStr = classStr.substring(1).trim();
-                } else if (classStr.startsWith('T')) {
+               if (/^L[A-Z0-9]/.test(classStr)) {
+                result.type = 'Lecture';
+                classStr = classStr.replace(/^L/, '').trim();
+                } else if (/^T[A-Z0-9]/.test(classStr)) {
                     result.type = 'Tutorial';
-                    classStr = classStr.substring(1).trim();
-                } else if (classStr.startsWith('P')) {
+                    classStr = classStr.replace(/^T/, '').trim();
+                } else if (/^P[A-Z0-9]/.test(classStr)) {
                     result.type = 'Practical';
-                    classStr = classStr.substring(1).trim();
-                } else {
-                    // If no prefix, assume it's a lecture
-                    result.type = 'Lecture';
+                    classStr = classStr.replace(/^P/, '').trim();
                 }
 
                 // Step 2: Split by '-' to separate batch/subject from room/teacher
