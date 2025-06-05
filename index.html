@@ -489,6 +489,16 @@
                 raw: false 
             });
 
+            // Fill down day names in column A (or adjust if needed)
+            for (let R = 1; R < jsonData.length; R++) {
+                if (!jsonData[R][0] || jsonData[R][0].trim() === '') {
+                    jsonData[R][0] = jsonData[R - 1][0];
+                }
+            }
+
+console.log('Excel data loaded (after fill down):', jsonData);
+
+
             console.log('Excel data loaded:', jsonData.length, 'rows');
             console.log('Sample data:', jsonData.slice(0, 10));
 
@@ -590,173 +600,71 @@
             return timetableData;
         }
 
-        function parseClassString(classStr, selectedBatch) {
-            const result = {
-                isRelevant: false,
-                type: 'Lecture',
-                subject: '',
-                room: '',
-                teacher: '',
-                batches: [],
-                originalString: classStr
-            };
+       function parseClassString(classStr, selectedBatch) {
+    const result = {
+        isRelevant: false,
+        type: 'Lecture', // default
+        subject: '',
+        room: '',
+        teacher: '',
+        batches: [],
+        originalString: classStr
+    };
 
-            try {
-                let workingStr = classStr.trim();
-                console.log('Parsing class string:', workingStr, 'for batch:', selectedBatch);
+    try {
+        let workingStr = classStr.trim();
+        console.log('Parsing class string:', workingStr, 'for batch:', selectedBatch);
 
-                // Enhanced type detection
-                if (/^L\d/i.test(workingStr) || /lecture/i.test(workingStr)) {
-                    result.type = 'Lecture';
-                    workingStr = workingStr.replace(/^L\d*/i, '').trim();
-                } else if (/^T\d/i.test(workingStr) || /tutorial/i.test(workingStr)) {
-                    result.type = 'Tutorial';
-                    workingStr = workingStr.replace(/^T\d*/i, '').trim();
-                } else if (/^P\d/i.test(workingStr) || /practical/i.test(workingStr) || /lab/i.test(workingStr)) {
-                    result.type = 'Practical';
-                    workingStr = workingStr.replace(/^P\d*/i, '').trim();
-                }
-
-                // Try different parsing patterns
-                let parsed = false;
-
-                // Pattern 1: "A4,A5(CI121)-LAB1/DSR"
-                let match1 = workingStr.match(/^([^(]+)\(([^)]+)\)[-\s]*(.+)$/);
-                if (match1) {
-                    const batchesPart = match1[1].trim();
-                    result.subject = match1[2].trim();
-                    const roomTeacherPart = match1[3].trim();
-                    
-                    // Parse batches
-                    if (batchesPart.toUpperCase().includes('ALL') || 
-                        batchesPart.toUpperCase().includes('ABC') ||
-                        batchesPart === '') {
-                        result.batches = ['ALL'];
-                        result.isRelevant = true;
-                    } else {
-                        result.batches = batchesPart.split(',').map(b => b.trim()).filter(b => b);
-                        result.isRelevant = result.batches.includes(selectedBatch);
-                    }
-                    
-                    // Parse room/teacher
-                    if (roomTeacherPart.includes('/')) {
-                        const [room, teacher] = roomTeacherPart.split('/');
-                        result.room = room.trim();
-                        result.teacher = teacher.trim();
-                    } else {
-                        result.room = roomTeacherPart;
-                    }
-                    
-                    parsed = true;
-                }
-
-                // Pattern 2: "(CI121)A4,A5-LAB1/DSR"
-                if (!parsed) {
-                    let match2 = workingStr.match(/^\(([^)]+)\)([^-]+)[-\s]*(.+)$/);
-                    if (match2) {
-                        result.subject = match2[1].trim();
-                        const batchesPart = match2[2].trim();
-                        const roomTeacherPart = match2[3].trim();
-                        
-                        // Parse batches
-                        if (batchesPart.toUpperCase().includes('ALL') || 
-                            batchesPart.toUpperCase().includes('ABC') ||
-                            batchesPart === '') {
-                            result.batches = ['ALL'];
-                            result.isRelevant = true;
-                        } else {
-                            result.batches = batchesPart.split(',').map(b => b.trim()).filter(b => b);
-                            result.isRelevant = result.batches.includes(selectedBatch);
-                        }
-                        
-                        // Parse room/teacher
-                        if (roomTeacherPart.includes('/')) {
-                            const [room, teacher] = roomTeacherPart.split('/');
-                            result.room = room.trim();
-                            result.teacher = teacher.trim();
-                        } else {
-                            result.room = roomTeacherPart;
-                        }
-                        
-                        parsed = true;
-                    }
-                }
-
-                // Pattern 3: Simple format without parentheses
-                if (!parsed && workingStr.includes('-')) {
-                    const parts = workingStr.split('-');
-                    if (parts.length >= 2) {
-                        const firstPart = parts[0].trim();
-                        const secondPart = parts.slice(1).join('-').trim();
-                        
-                        // Try to extract subject code
-                        const subjectMatch = firstPart.match(/([A-Z]{2}\d{3})/);
-                        if (subjectMatch) {
-                            result.subject = subjectMatch[1];
-                        }
-                        
-                        // Extract batches (look for patterns like A1, B2, etc.)
-                        const batchMatches = firstPart.match(/([ABC]\d+)/g);
-                        if (batchMatches) {
-                            result.batches = batchMatches;
-                            result.isRelevant = result.batches.includes(selectedBatch);
-                        } else {
-                            // If no specific batches found, assume it's for all
-                            result.batches = ['ALL'];
-                            result.isRelevant = true;
-                        }
-                        
-                        // Parse room/teacher
-                        if (secondPart.includes('/')) {
-                            const [room, teacher] = secondPart.split('/');
-                            result.room = room.trim();
-                            result.teacher = teacher.trim();
-                        } else {
-                            result.room = secondPart;
-                        }
-                        
-                        parsed = true;
-                    }
-                }
-
-                // If still not parsed, try basic extraction
-                if (!parsed) {
-                    // Extract subject code if present
-                    const subjectMatch = workingStr.match(/([A-Z]{2}\d{3})/);
-                    if (subjectMatch) {
-                        result.subject = subjectMatch[1];
-                    }
-                    
-                    // Look for batch patterns
-                    const batchMatches = workingStr.match(/([ABC]\d+)/g);
-                    if (batchMatches) {
-                        result.batches = batchMatches;
-                        result.isRelevant = result.batches.includes(selectedBatch);
-                    } else {
-                        // Default to relevant for selected batch
-                        result.batches = [selectedBatch];
-                        result.isRelevant = true;
-                    }
-                    
-                    result.room = workingStr.replace(/([A-Z]{2}\d{3})/g, '').replace(/([ABC]\d+)/g, '').trim();
-                }
-
-                console.log('Parse result:', {
-                    original: classStr,
-                    working: workingStr,
-                    parsed: result,
-                    selectedBatch: selectedBatch
-                });
-
-            } catch (error) {
-                console.error('Error parsing class string:', classStr, error);
-                // Make it relevant by default to avoid missing classes
-                result.isRelevant = true;
-                result.subject = classStr;
-            }
-
-            return result;
+        // Type detection
+        if (/^T/i.test(workingStr)) {
+            result.type = 'Tutorial';
+        } else if (/^P/i.test(workingStr) || /lab/i.test(workingStr)) {
+            result.type = 'Practical';
+        } else if (/^L/i.test(workingStr)) {
+            result.type = 'Lecture';
         }
+
+        // Extract batches (dynamic, even L/T/P prefixed)
+        const batchRegex = /[A-Z]*[ABC]\d+/gi;
+        const batchMatches = workingStr.match(batchRegex);
+        if (batchMatches) {
+            result.batches = batchMatches.map(b => b.trim());
+            result.isRelevant = result.batches.includes(selectedBatch);
+        } else {
+            result.batches = [selectedBatch];
+            result.isRelevant = true;
+        }
+
+        // Extract subject code (2 letters + 3 digits)
+        const subjectMatch = workingStr.match(/[A-Z]{2}\d{3}/);
+        if (subjectMatch) {
+            result.subject = subjectMatch[0];
+        }
+
+        // Room & teacher info
+        const dashParts = workingStr.split('-');
+        if (dashParts.length > 1) {
+            const roomTeacherPart = dashParts.slice(1).join('-').trim();
+            if (roomTeacherPart.includes('/')) {
+                const [room, teacher] = roomTeacherPart.split('/');
+                result.room = room.trim();
+                result.teacher = teacher.trim();
+            } else {
+                result.room = roomTeacherPart;
+            }
+        }
+
+        console.log('Final parsed result:', result);
+
+    } catch (error) {
+        console.error('Error parsing class string:', classStr, error);
+        result.isRelevant = true;
+        result.subject = classStr;
+    }
+
+    return result;
+}
+
 
         function displayTimetable(data, selectedBatch) {
             const content = document.getElementById('content');
