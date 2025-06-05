@@ -600,69 +600,80 @@ console.log('Excel data loaded (after fill down):', jsonData);
             return timetableData;
         }
 
-       function parseClassString(classStr, selectedBatch) {
+     const IGNORED_KEYWORDS = ['LUNCH', 'BREAK', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+
+function parseClassString(classStr, selectedBatch) {
     const result = {
         isRelevant: false,
-        type: 'Lecture', // default
+        type: 'Lecture',
         subject: '',
         room: '',
         teacher: '',
-        batches: [],
-        originalString: classStr
+        batches: []
     };
 
     try {
-        let workingStr = classStr.trim();
-        console.log('Parsing class string:', workingStr, 'for batch:', selectedBatch);
+        const originalStr = classStr.trim();
+        const upperStr = originalStr.toUpperCase();
 
-        // Type detection
-        if (/^T/i.test(workingStr)) {
-            result.type = 'Tutorial';
-        } else if (/^P/i.test(workingStr) || /lab/i.test(workingStr)) {
-            result.type = 'Practical';
-        } else if (/^L/i.test(workingStr)) {
+        // Skip empty or irrelevant cells
+        if (IGNORED_KEYWORDS.includes(upperStr) || upperStr.length <= 2) {
+            return result;
+        }
+
+        // Detect type and strip prefix
+        if (/^L[A-Z0-9]/.test(originalStr)) {
             result.type = 'Lecture';
+            classStr = originalStr.replace(/^L/, '').trim();
+        } else if (/^T[A-Z0-9]/.test(originalStr)) {
+            result.type = 'Tutorial';
+            classStr = originalStr.replace(/^T/, '').trim();
+        } else if (/^P[A-Z0-9]/.test(originalStr)) {
+            result.type = 'Practical';
+            classStr = originalStr.replace(/^P/, '').trim();
         }
 
-        // Extract batches (dynamic, even L/T/P prefixed)
-        const batchRegex = /[A-Z]*[ABC]\d+/gi;
-        const batchMatches = workingStr.match(batchRegex);
-        if (batchMatches) {
-            result.batches = batchMatches.map(b => b.trim());
-            result.isRelevant = result.batches.includes(selectedBatch);
-        } else {
-            result.batches = [selectedBatch];
-            result.isRelevant = true;
+        const dashParts = classStr.split('-');
+        if (dashParts.length < 2) {
+            console.log('Invalid class format, skipping:', originalStr);
+            return result;
         }
 
-        // Extract subject code (2 letters + 3 digits)
-        const subjectMatch = workingStr.match(/[A-Z]{2}\d{3}/);
+        const batchSubjectPart = dashParts[0].trim(); // e.g., LB3,B4(PH211)
+        const roomTeacherPart = dashParts[1].trim();  // e.g., FF7/VRT or FF7/VRT,XYZ
+
+        const subjectMatch = batchSubjectPart.match(/\(([^)]+)\)/);
         if (subjectMatch) {
-            result.subject = subjectMatch[0];
+            result.subject = subjectMatch[1]; // e.g., CI121
         }
 
-        // Room & teacher info
-        const dashParts = workingStr.split('-');
-        if (dashParts.length > 1) {
-            const roomTeacherPart = dashParts.slice(1).join('-').trim();
-            if (roomTeacherPart.includes('/')) {
-                const [room, teacher] = roomTeacherPart.split('/');
-                result.room = room.trim();
-                result.teacher = teacher.trim();
-            } else {
-                result.room = roomTeacherPart;
-            }
+        const batchesStr = batchSubjectPart.replace(/\([^)]*\)/, '').trim();
+        if (batchesStr.toUpperCase().includes('ABC') || batchesStr.toUpperCase().includes('ALL') || batchesStr === '') {
+            result.isRelevant = true;
+            result.batches = ['ALL'];
+        } else {
+            const batchList = batchesStr
+                .split(',')
+                .map(b => b.trim().replace(/^[LTP]/, ''))  // Clean all batch prefixes
+                .filter(b => b !== '');
+            result.batches = batchList;
+            result.isRelevant = batchList.includes(selectedBatch);
         }
 
-        console.log('Final parsed result:', result);
+        if (roomTeacherPart.includes('/')) {
+            const [room, teacher] = roomTeacherPart.split('/');
+            result.room = room.trim();
+            result.teacher = teacher ? teacher.trim() : '';
+        } else {
+            result.room = roomTeacherPart.trim();
+        }
+
+        return result;
 
     } catch (error) {
         console.error('Error parsing class string:', classStr, error);
-        result.isRelevant = true;
-        result.subject = classStr;
+        return result;
     }
-
-    return result;
 }
 
 
