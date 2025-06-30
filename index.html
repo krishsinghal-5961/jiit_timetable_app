@@ -410,7 +410,8 @@
             '5-5.50'
         ];
 
-        const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const IGNORED_KEYWORDS = ['LUNCH', 'BREAK', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'SUN', 'IMPORTANT', 'MEETING'];
 
         async function loadTimetable() {
             const campus = document.getElementById('campus').value;
