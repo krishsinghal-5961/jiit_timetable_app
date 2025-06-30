@@ -601,119 +601,101 @@ function parseClassString(classStr, selectedBatch) {
     return result;
 }
 
-      function displayTimetable(data, selectedBatch) {
-    const content = document.getElementById('content');
-    
-    // Create timetable HTML
-    let html = `
-        <div class="timetable-container">
-            <h2 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">
-                📅 Timetable for Batch ${selectedBatch}
-            </h2>
+        function displayTimetable(data, selectedBatch) {
+            const content = document.getElementById('content');
             
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color lecture"></div>
-                    <span>Lecture</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color tutorial"></div>
-                    <span>Tutorial</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color practical"></div>
-                    <span>Practical</span>
-                </div>
-            </div>
-
-            <table class="timetable">
-                <thead>
-                    <tr>
-                        <th>Day</th>
-        `;
-
-    // Get unique time slots and sort them chronologically
-    const uniqueTimeSlots = [...new Set(data.map(item => item.originalTime))];
-    
-    // Function to sort time slots chronologically
-    function sortTimeSlots(timeSlots) {
-        return timeSlots.sort((a, b) => {
-            // Extract start time from format like "8-8.50" or "10-10.50"
-            const getStartTime = (timeStr) => {
-                if (!timeStr || typeof timeStr !== 'string') return 0;
-                const match = timeStr.match(/^(\d{1,2})/);
-                return match ? parseInt(match[1]) : 0;
-            };
-            
-            const timeA = getStartTime(a);
-            const timeB = getStartTime(b);
-            
-            return timeA - timeB;
-        });
-    }
-    
-    // Use sorted time slots, fallback to predefined TIME_SLOTS if no data found
-    const sortedTimeSlots = uniqueTimeSlots.length > 0 ? sortTimeSlots(uniqueTimeSlots) : TIME_SLOTS;
-    
-    sortedTimeSlots.forEach(time => {
-        html += `<th>${time}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
-    // Add timetable rows for each day
-    DAYS.forEach(day => {
-        html += `<tr><td class="day-cell">${day}</td>`;
-        
-        sortedTimeSlots.forEach(timeSlot => {
-            // Find class for this day and time
-            const classData = data.find(item => 
-                item.day === day && 
-                (item.originalTime === timeSlot || 
-                 item.time === timeSlot ||
-                 timeSlot.includes(item.time.split('-')[0]) ||
-                 item.time.includes(timeSlot.split('-')[0]))
-            );
-
-            if (classData) {
-                const classType = classData.type.toLowerCase();
-                html += `
-                    <td class="class-cell ${classType}" title="${classData.originalString || ''}">
-                        <div class="class-info">
-                            <div class="subject">${classData.subject || 'N/A'}</div>
-                            <div class="room-teacher">${classData.room || 'Room'} | ${classData.teacher || 'Teacher'}</div>
-                            <div class="batch-tag">${classData.type.charAt(0)}</div>
+            // Create timetable HTML
+            let html = `
+                <div class="timetable-container">
+                    <h2 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">
+                        📅 Timetable for Batch ${selectedBatch}
+                    </h2>
+                    
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color lecture"></div>
+                            <span>Lecture</span>
                         </div>
-                    </td>
-                `;
-            } else {
-                html += '<td class="empty-cell">-</td>';
-            }
-        });
-        
-        html += '</tr>';
-    });
+                        <div class="legend-item">
+                            <div class="legend-color tutorial"></div>
+                            <span>Tutorial</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color practical"></div>
+                            <span>Practical</span>
+                        </div>
+                    </div>
 
-    html += '</tbody></table>';
-    
-    // Add debug information if enabled
-    if (debugMode && data.length > 0) {
-        html += `
-            <div class="debug-info">
-                <h4>Debug Information</h4>
-                <p><strong>Total classes found:</strong> ${data.length}</p>
-                <p><strong>Days with classes:</strong> ${[...new Set(data.map(d => d.day))].join(', ')}</p>
-                <p><strong>Time slots used:</strong> ${sortedTimeSlots.join(', ')}</p>
-                <details>
-                    <summary>All parsed classes</summary>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                </details>
-            </div>
-        `;
-    }
-    
-    html += '</div>';
-    content.innerHTML = html;
-}
+                    <table class="timetable">
+                        <thead>
+                            <tr>
+                                <th>Day</th>
+            `;
+
+            // Add time slot headers - use the actual time slots found in data
+            const uniqueTimeSlots = [...new Set(data.map(item => item.originalTime))];
+            const sortedTimeSlots = uniqueTimeSlots.length > 0 ? uniqueTimeSlots : TIME_SLOTS;
+            
+            sortedTimeSlots.forEach(time => {
+                html += `<th>${time}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            // Add timetable rows for each day
+            DAYS.forEach(day => {
+                html += `<tr><td class="day-cell">${day}</td>`;
+                
+                sortedTimeSlots.forEach(timeSlot => {
+                    // Find class for this day and time
+                    const classData = data.find(item => 
+                        item.day === day && 
+                        (item.originalTime === timeSlot || 
+                         item.time === timeSlot ||
+                         timeSlot.includes(item.time.split('-')[0]) ||
+                         item.time.includes(timeSlot.split('-')[0]))
+                    );
+
+                    if (classData) {
+                        const classType = classData.type.toLowerCase();
+                        html += `
+                            <td class="class-cell ${classType}" title="${classData.originalString || ''}">
+                                <div class="class-info">
+                                    <div class="subject">${classData.subject || 'N/A'}</div>
+                                    <div class="room-teacher">${classData.room || 'Room'} | ${classData.teacher || 'Teacher'}</div>
+                                    <div class="batch-tag">${classData.type.charAt(0)}</div>
+                                </div>
+                            </td>
+                        `;
+                    } else {
+                        html += '<td class="empty-cell">-</td>';
+                    }
+                });
+                
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            
+            // Add debug information if enabled
+            if (debugMode && data.length > 0) {
+                html += `
+                    <div class="debug-info">
+                        <h4>Debug Information</h4>
+                        <p><strong>Total classes found:</strong> ${data.length}</p>
+                        <p><strong>Days with classes:</strong> ${[...new Set(data.map(d => d.day))].join(', ')}</p>
+                        <p><strong>Time slots used:</strong> ${[...new Set(data.map(d => d.originalTime))].join(', ')}</p>
+                        <details>
+                            <summary>All parsed classes</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            content.innerHTML = html;
+        }
+
         function displayDebugInfo(worksheet, selectedBatch) {
             const content = document.getElementById('content');
             
