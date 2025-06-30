@@ -602,100 +602,78 @@ function parseClassString(classStr, selectedBatch) {
 }
 
         function displayTimetable(data, selectedBatch) {
-            const content = document.getElementById('content');
+    const content = document.getElementById('content');
+    
+    // Create timetable HTML
+    let html = `
+        <div class="timetable-container">
+            <h2 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">
+                📅 Timetable for Batch ${selectedBatch}
+            </h2>
             
-            // Create timetable HTML
-            let html = `
-                <div class="timetable-container">
-                    <h2 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">
-                        📅 Timetable for Batch ${selectedBatch}
-                    </h2>
-                    
-                    <div class="legend">
-                        <div class="legend-item">
-                            <div class="legend-color lecture"></div>
-                            <span>Lecture</span>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color tutorial"></div>
-                            <span>Tutorial</span>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color practical"></div>
-                            <span>Practical</span>
-                        </div>
-                    </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color lecture"></div>
+                    <span>Lecture</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color tutorial"></div>
+                    <span>Tutorial</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color practical"></div>
+                    <span>Practical</span>
+                </div>
+            </div>
 
-                    <table class="timetable">
-                        <thead>
-                            <tr>
-                                <th>Day</th>
-            `;
+            <table class="timetable">
+                <thead>
+                    <tr>
+                        <th>Day</th>
+    `;
 
-            // Add time slot headers - use the actual time slots found in data
-            const uniqueTimeSlots = [...new Set(data.map(item => item.originalTime))];
-            const sortedTimeSlots = uniqueTimeSlots.length > 0 ? uniqueTimeSlots : TIME_SLOTS;
-            
-            sortedTimeSlots.forEach(time => {
-                html += `<th>${time}</th>`;
-            });
-            html += '</tr></thead><tbody>';
+    // Always use the fixed TIME_SLOTS order for headers
+    TIME_SLOTS.forEach(time => {
+        html += `<th>${time}</th>`;
+    });
+    html += '</tr></thead><tbody>';
 
-            // Add timetable rows for each day
-            DAYS.forEach(day => {
-                html += `<tr><td class="day-cell">${day}</td>`;
-                
-                sortedTimeSlots.forEach(timeSlot => {
-                    // Find class for this day and time
-                    const classData = data.find(item => 
-                        item.day === day && 
-                        (item.originalTime === timeSlot || 
-                         item.time === timeSlot ||
-                         timeSlot.includes(item.time.split('-')[0]) ||
-                         item.time.includes(timeSlot.split('-')[0]))
-                    );
+    // Add timetable rows for each day
+    DAYS.forEach(day => {
+        html += `<tr><td class="day-cell">${day}</td>`;
+        
+        TIME_SLOTS.forEach(timeSlot => {
+            // Find class for this day and time
+            const classData = data.find(item => 
+                item.day === day && 
+                (item.originalTime === timeSlot || 
+                 item.time === timeSlot ||
+                 timeSlot.includes(item.time.split('-')[0]) ||
+                 item.time.includes(timeSlot.split('-')[0]))
+            );
 
-                    if (classData) {
-                        const classType = classData.type.toLowerCase();
-                        html += `
-                            <td class="class-cell ${classType}" title="${classData.originalString || ''}">
-                                <div class="class-info">
-                                    <div class="subject">${classData.subject || 'N/A'}</div>
-                                    <div class="room-teacher">${classData.room || 'Room'} | ${classData.teacher || 'Teacher'}</div>
-                                    <div class="batch-tag">${classData.type.charAt(0)}</div>
-                                </div>
-                            </td>
-                        `;
-                    } else {
-                        html += '<td class="empty-cell">-</td>';
-                    }
-                });
-                
-                html += '</tr>';
-            });
-
-            html += '</tbody></table>';
-            
-            // Add debug information if enabled
-            if (debugMode && data.length > 0) {
+            if (classData) {
+                const classType = classData.type.toLowerCase();
                 html += `
-                    <div class="debug-info">
-                        <h4>Debug Information</h4>
-                        <p><strong>Total classes found:</strong> ${data.length}</p>
-                        <p><strong>Days with classes:</strong> ${[...new Set(data.map(d => d.day))].join(', ')}</p>
-                        <p><strong>Time slots used:</strong> ${[...new Set(data.map(d => d.originalTime))].join(', ')}</p>
-                        <details>
-                            <summary>All parsed classes</summary>
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
-                        </details>
-                    </div>
+                    <td class="class-cell ${classType}" title="${classData.originalString || ''}">
+                        <div class="class-info">
+                            <div class="subject">${classData.subject || 'N/A'}</div>
+                            <div class="room-teacher">${classData.room || 'Room'} | ${classData.teacher || 'Teacher'}</div>
+                            <div class="batch-tag">${classData.type.charAt(0)}</div>
+                        </div>
+                    </td>
                 `;
+            } else {
+                html += '<td class="empty-cell">-</td>';
             }
-            
-            html += '</div>';
-            content.innerHTML = html;
-        }
+        });
+        
+        html += '</tr>';
+    });
 
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+}
         function displayDebugInfo(worksheet, selectedBatch) {
             const content = document.getElementById('content');
             
