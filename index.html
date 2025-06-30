@@ -479,128 +479,70 @@
             }
         }
 
-        function parseExcelTimetable(worksheet, selectedBatch) {
-            const timetableData = [];
-            
-            // Convert worksheet to JSON for easier parsing
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-                header: 1, 
-                defval: '', 
-                raw: false 
-            });
+       function parseExcelTimetable(worksheet, selectedBatch) {
+    const timetableData = [];
+    
+    // Convert worksheet to JSON for easier parsing
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+        header: 1, 
+        defval: '', 
+        raw: false 
+    });
 
-            // Fill down day names in column A (or adjust if needed)
-            for (let R = 1; R < jsonData.length; R++) {
-                if (!jsonData[R][0] || jsonData[R][0].trim() === '') {
-                    jsonData[R][0] = jsonData[R - 1][0];
-                }
-            }
-
-console.log('Excel data loaded (after fill down):', jsonData);
-
-
-            console.log('Excel data loaded:', jsonData.length, 'rows');
-            console.log('Sample data:', jsonData.slice(0, 10));
-
-            // More flexible day detection
-            let dayRowsMap = new Map();
-            
-            // Scan all cells for day names (not just first column)
-            for (let R = 0; R < Math.min(50, jsonData.length); R++) {
-                for (let C = 0; C < Math.min(20, jsonData[R] ? jsonData[R].length : 0); C++) {
-                    const cellValue = String(jsonData[R][C] || '').toLowerCase().trim();
-                    
-                    DAYS.forEach(day => {
-                        if (cellValue === day.toLowerCase() || 
-                            cellValue === day.toLowerCase() + 'day' ||
-                            cellValue.includes(day.toLowerCase())) {
-                            
-                            if (!dayRowsMap.has(day)) {
-                                dayRowsMap.set(day, { row: R, col: C, day: day });
-                                console.log(`Found ${day} at row ${R}, col ${C}`);
-                            }
-                        }
-                    });
-                }
-            }
-
-            // More flexible time slot detection
-            let timeColumnsMap = new Map();
-            
-            // Look for time patterns in the first few rows and around day headers
-            for (let R = 0; R < Math.min(20, jsonData.length); R++) {
-                if (jsonData[R]) {
-                    for (let C = 0; C < jsonData[R].length; C++) {
-                        const cellValue = String(jsonData[R][C] || '').trim();
-                        
-                        // Enhanced time pattern matching
-                        if (cellValue && (
-                            /^\d{1,2}[-:]\d{1,2}/.test(cellValue) ||  // 8-8.50 or 8:00
-                            /^\d{1,2}\.\d{2}[-:]\d{1,2}\.\d{2}/.test(cellValue) ||  // 8.00-8.50
-                            /^\d{1,2}(AM|PM)/.test(cellValue.toUpperCase()) ||  // 8AM
-                            TIME_SLOTS.some(slot => cellValue.includes(slot.split('-')[0]))
-                        )) {
-                            if (!timeColumnsMap.has(C)) {
-                                timeColumnsMap.set(C, { col: C, time: cellValue });
-                                console.log(`Found time slot "${cellValue}" at col ${C}`);
-                            }
-                        }
-                    }
-                }
-            }
-
-            const dayRows = Array.from(dayRowsMap.values());
-            const timeColumns = Array.from(timeColumnsMap.values());
-            
-            console.log('Found days:', dayRows);
-            console.log('Found time columns:', timeColumns);
-
-            // Extract timetable data with improved logic
-            dayRows.forEach(dayInfo => {
-                timeColumns.forEach(timeInfo => {
-                    // Check the cell at the intersection of day row and time column
-                    let cellValue = '';
-                    
-                    if (jsonData[dayInfo.row] && jsonData[dayInfo.row][timeInfo.col]) {
-                        cellValue = String(jsonData[dayInfo.row][timeInfo.col]).trim();
-                    }
-                    
-                    // If empty, try adjacent cells (common in merged cell scenarios)
-                    if (!cellValue || cellValue === '' || cellValue === '-') {
-                        // Try the cell below
-                        if (jsonData[dayInfo.row + 1] && jsonData[dayInfo.row + 1][timeInfo.col]) {
-                            cellValue = String(jsonData[dayInfo.row + 1][timeInfo.col]).trim();
-                        }
-                    }
-                    
-                    if (cellValue && cellValue !== '' && cellValue !== '-') {
-                        console.log(`Processing cell [${dayInfo.row}, ${timeInfo.col}]: "${cellValue}"`);
-                        
-                        // Parse class information
-                        const classInfo = parseClassString(cellValue, selectedBatch);
-                        
-                        if (classInfo.isRelevant) {
-                            const entry = {
-                                day: dayInfo.day,
-                                time: timeInfo.time,
-                                originalTime: timeInfo.time,
-                                ...classInfo
-                            };
-                            
-                            timetableData.push(entry);
-                            console.log('Added relevant class:', entry);
-                        } else {
-                            console.log(`Class not relevant for batch ${selectedBatch}:`, classInfo);
-                        }
-                    }
-                });
-            });
-
-            console.log('Final parsed timetable data:', timetableData);
-            return timetableData;
+    // First, find the row with time slots (header row)
+    let timeRowIndex = -1;
+    let timeSlots = [];
+    
+    for (let R = 0; R < Math.min(10, jsonData.length); R++) {
+        const row = jsonData[R];
+        // Look for time patterns in the row
+        const potentialTimes = row.filter(cell => 
+            typeof cell === 'string' && 
+            /^\d{1,2}-\d{1,2}\.\d{2}$/.test(cell.trim())
+        );
+        
+        if (potentialTimes.length > 3) { // If we found several time slots
+            timeRowIndex = R;
+            timeSlots = row.slice(1); // Skip first column (day names)
+            break;
         }
+    }
 
-     const IGNORED_KEYWORDS = ['LUNCH', 'BREAK', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    if (timeRowIndex === -1) {
+        console.error('Could not find time slots row');
+        return timetableData;
+    }
+
+    // Now process each day's data
+    for (let R = timeRowIndex + 1; R < jsonData.length; R++) {
+        const row = jsonData[R];
+        if (!row || row.length === 0) continue;
+        
+        const dayCell = String(row[0] || '').trim().toUpperCase();
+        if (!DAYS.some(d => dayCell.includes(d.toUpperCase()))) continue;
+        
+        const day = DAYS.find(d => dayCell.includes(d.toUpperCase())) || dayCell;
+
+        // Process each time slot column
+        for (let C = 1; C < row.length; C++) {
+            const cellValue = String(row[C] || '').trim();
+            if (!cellValue || IGNORED_KEYWORDS.includes(cellValue.toUpperCase())) continue;
+            
+            // Parse the class information
+            const classInfo = parseClassString(cellValue, selectedBatch);
+            if (classInfo.isRelevant) {
+                timetableData.push({
+                    day: day,
+                    time: timeSlots[C-1] || `Col ${C}`,
+                    originalTime: timeSlots[C-1] || `Col ${C}`,
+                    ...classInfo
+                });
+            }
+        }
+    }
+
+    return timetableData;
+}
 
 function parseClassString(classStr, selectedBatch) {
     const result = {
@@ -609,73 +551,54 @@ function parseClassString(classStr, selectedBatch) {
         subject: '',
         room: '',
         teacher: '',
-        batches: []
+        batches: [],
+        originalString: classStr
     };
 
-    try {
-        const originalStr = classStr.trim();
-        const upperStr = originalStr.toUpperCase();
-
-        // Skip empty or irrelevant cells
-        if (IGNORED_KEYWORDS.includes(upperStr) || upperStr.length <= 2) {
-            return result;
-        }
-
-        // Detect type and strip prefix
-        if (/^L[A-Z0-9]/.test(originalStr)) {
-            result.type = 'Lecture';
-            classStr = originalStr.replace(/^L/, '').trim();
-        } else if (/^T[A-Z0-9]/.test(originalStr)) {
-            result.type = 'Tutorial';
-            classStr = originalStr.replace(/^T/, '').trim();
-        } else if (/^P[A-Z0-9]/.test(originalStr)) {
-            result.type = 'Practical';
-            classStr = originalStr.replace(/^P/, '').trim();
-        }
-
-        const dashParts = classStr.split('-');
-        if (dashParts.length < 2) {
-            console.log('Invalid class format, skipping:', originalStr);
-            return result;
-        }
-
-        const batchSubjectPart = dashParts[0].trim(); // e.g., LB3,B4(PH211)
-        const roomTeacherPart = dashParts[1].trim();  // e.g., FF7/VRT or FF7/VRT,XYZ
-
-        const subjectMatch = batchSubjectPart.match(/\(([^)]+)\)/);
-        if (subjectMatch) {
-            result.subject = subjectMatch[1]; // e.g., CI121
-        }
-
-        const batchesStr = batchSubjectPart.replace(/\([^)]*\)/, '').trim();
-        if (batchesStr.toUpperCase().includes('ABC') || batchesStr.toUpperCase().includes('ALL') || batchesStr === '') {
-            result.isRelevant = true;
-            result.batches = ['ALL'];
-        } else {
-            const batchList = batchesStr
-                .split(',')
-                .map(b => b.trim().replace(/^[LTP]/, ''))  // Clean all batch prefixes
-                .filter(b => b !== '');
-            result.batches = batchList;
-            result.isRelevant = batchList.includes(selectedBatch);
-        }
-
-        if (roomTeacherPart.includes('/')) {
-            const [room, teacher] = roomTeacherPart.split('/');
-            result.room = room.trim();
-            result.teacher = teacher ? teacher.trim() : '';
-        } else {
-            result.room = roomTeacherPart.trim();
-        }
-
-        return result;
-
-    } catch (error) {
-        console.error('Error parsing class string:', classStr, error);
-        return result;
+    // Determine class type from first character
+    if (classStr.startsWith('L')) {
+        result.type = 'Lecture';
+    } else if (classStr.startsWith('T')) {
+        result.type = 'Tutorial';
+    } else if (classStr.startsWith('P')) {
+        result.type = 'Practical';
     }
-}
 
+    // Split into batch/subject and room/teacher parts
+    const dashParts = classStr.split('-');
+    if (dashParts.length < 2) return result;
+
+    const batchSubjectPart = dashParts[0].trim();
+    const roomTeacherPart = dashParts.slice(1).join('-').trim();
+
+    // Extract subject code
+    const subjectMatch = batchSubjectPart.match(/\(([^)]+)\)/);
+    if (subjectMatch) {
+        result.subject = subjectMatch[1];
+    }
+
+    // Extract batches (handle formats like LA5,A6 or LB1,B2)
+    const batchesStr = batchSubjectPart.replace(/\([^)]+\)/, '').replace(/^[A-Z]/, '');
+    const batchList = batchesStr.split(',')
+        .map(b => b.trim())
+        .filter(b => b !== '');
+
+    // Check if this class is for the selected batch
+    result.batches = batchList;
+    result.isRelevant = batchList.includes(selectedBatch) || 
+                        batchList.some(b => b === selectedBatch.replace(/^[A-Z]/, ''));
+
+    // Extract room and teacher
+    if (roomTeacherPart.includes('/')) {
+        const [room, ...teacherParts] = roomTeacherPart.split('/');
+        result.room = room.trim();
+        result.teacher = teacherParts.join('/').trim();
+    } else {
+        result.room = roomTeacherPart;
+    }
+
+    return result;
+}
 
         function displayTimetable(data, selectedBatch) {
             const content = document.getElementById('content');
