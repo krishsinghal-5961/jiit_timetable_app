@@ -394,10 +394,11 @@
         };
 
         let currentTimetableData = null;
-        let debugMode = false; // Set to false in production
+        let debugMode = true; // Set to false in production
 
         // Time slots - adjust according to your college schedule
         const TIME_SLOTS = [
+            '8-8.50',
             '9-9.50',
             '10-10.50', 
             '11-11.50',
@@ -410,7 +411,7 @@
         ];
 
         const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-        const IGNORED_KEYWORDS = [ 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'SUN', 'IMPORTANT', 'MEETING'];
+        const IGNORED_KEYWORDS = ['LUNCH', 'BREAK', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'SUN', 'IMPORTANT', 'MEETING'];
 
         async function loadTimetable() {
             const campus = document.getElementById('campus').value;
@@ -479,7 +480,7 @@
             }
         }
 
-      function parseExcelTimetable(worksheet, selectedBatch) {
+       function parseExcelTimetable(worksheet, selectedBatch) {
     const timetableData = [];
     
     // Convert worksheet to JSON for easier parsing
@@ -489,54 +490,54 @@
         raw: false 
     });
 
-    // Variables to track current day and time slots
-    let currentDay = '';
+    // First, find the row with time slots (header row)
+    let timeRowIndex = -1;
     let timeSlots = [];
-    let foundHeader = false;
+    
+    for (let R = 0; R < Math.min(10, jsonData.length); R++) {
+        const row = jsonData[R];
+        // Look for time patterns in the row
+        const potentialTimes = row.filter(cell => 
+            typeof cell === 'string' && 
+            /^\d{1,2}-\d{1,2}\.\d{2}$/.test(cell.trim())
+        );
+        
+        if (potentialTimes.length > 3) { // If we found several time slots
+            timeRowIndex = R;
+            timeSlots = row.slice(1); // Skip first column (day names)
+            break;
+        }
+    }
 
-    for (let R = 0; R < jsonData.length; R++) {
+    if (timeRowIndex === -1) {
+        console.error('Could not find time slots row');
+        return timetableData;
+    }
+
+    // Now process each day's data
+    for (let R = timeRowIndex + 1; R < jsonData.length; R++) {
         const row = jsonData[R];
         if (!row || row.length === 0) continue;
-
-        // Check for the header row containing time slots
-        if (!foundHeader) {
-            const potentialTimes = row.filter(cell => 
-                typeof cell === 'string' && 
-                /^\d{1,2}-\d{1,2}\.\d{2}$/.test(cell.trim())
-            );
-            
-            if (potentialTimes.length >= 5) { // Found time slots row
-                timeSlots = potentialTimes;
-                foundHeader = true;
-                continue;
-            }
-        }
-
-        // Check for day markers (MON, TUE, etc.)
-        const dayCell = String(row[0] || '').trim().toUpperCase();
-        const dayMatch = DAYS.find(day => dayCell.includes(day));
         
-        if (dayMatch) {
-            currentDay = dayMatch;
-            continue;
-        }
+        const dayCell = String(row[0] || '').trim().toUpperCase();
+        if (!DAYS.some(d => dayCell.includes(d.toUpperCase()))) continue;
+        
+        const day = DAYS.find(d => dayCell.includes(d.toUpperCase())) || dayCell;
 
-        // If we have a current day and time slots, process the row
-        if (currentDay && timeSlots.length > 0) {
-            for (let C = 0; C < Math.min(row.length, timeSlots.length); C++) {
-                const cellValue = String(row[C] || '').trim();
-                if (!cellValue || IGNORED_KEYWORDS.some(kw => cellValue.includes(kw))) continue;
-                
-                // Parse the class information
-                const classInfo = parseClassString(cellValue, selectedBatch);
-                if (classInfo.isRelevant) {
-                    timetableData.push({
-                        day: currentDay,
-                        time: timeSlots[C] || `Time ${C+1}`,
-                        originalTime: timeSlots[C] || `Time ${C+1}`,
-                        ...classInfo
-                    });
-                }
+        // Process each time slot column
+        for (let C = 1; C < row.length; C++) {
+            const cellValue = String(row[C] || '').trim();
+            if (!cellValue || IGNORED_KEYWORDS.includes(cellValue.toUpperCase())) continue;
+            
+            // Parse the class information
+            const classInfo = parseClassString(cellValue, selectedBatch);
+            if (classInfo.isRelevant) {
+                timetableData.push({
+                    day: day,
+                    time: timeSlots[C-1] || `Col ${C}`,
+                    originalTime: timeSlots[C-1] || `Col ${C}`,
+                    ...classInfo
+                });
             }
         }
     }
@@ -582,23 +583,11 @@ function parseClassString(classStr, selectedBatch) {
     const batchList = batchesStr.split(',')
         .map(b => b.trim())
         .filter(b => b !== '');
-    
-    result.batches = batchList;
 
-    // Improved batch matching
-    const batchLetter = selectedBatch.charAt(0); // 'A' for A4
-    const batchNumber = selectedBatch.slice(1);  // '4' for A4
-    
     // Check if this class is for the selected batch
-    result.isRelevant = batchList.some(b => {
-        // Match formats like:
-        // - "A4" when batch is "A4"
-        // - "4" when batch is "A4" (from LA4,A5)
-        // - "A4" when batch is "A4" (from LA4)
-        return b === batchNumber || 
-               (b.length > 1 && b[0] === batchLetter && b.slice(1) === batchNumber) ||
-               b === selectedBatch;
-    });
+    result.batches = batchList;
+    result.isRelevant = batchList.includes(selectedBatch) || 
+                        batchList.some(b => b === selectedBatch.replace(/^[A-Z]/, ''));
 
     // Extract room and teacher
     if (roomTeacherPart.includes('/')) {
@@ -611,87 +600,102 @@ function parseClassString(classStr, selectedBatch) {
 
     return result;
 }
+
         function displayTimetable(data, selectedBatch) {
-    const content = document.getElementById('content');
-    
-    // Create timetable HTML
-    let html = `
-        <div class="timetable-container">
-            <h2 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">
-                📅 Timetable for Batch ${selectedBatch}
-            </h2>
+            const content = document.getElementById('content');
             
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color lecture"></div>
-                    <span>Lecture</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color tutorial"></div>
-                    <span>Tutorial</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color practical"></div>
-                    <span>Practical</span>
-                </div>
-            </div>
-
-            <table class="timetable">
-                <thead>
-                    <tr>
-                        <th>Day</th>
-    `;
-
-    // Get all unique time slots from the data
-    const uniqueTimeSlots = [...new Set(data.map(item => item.time))].sort((a, b) => {
-        // Custom sorting to order time slots chronologically
-        const timeToNum = time => parseFloat(time.split('-')[0].replace('.', ''));
-        return timeToNum(a) - timeToNum(b);
-    });
-
-    // Add time slot headers
-    uniqueTimeSlots.forEach(time => {
-        html += `<th>${time}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
-    // Add timetable rows for each day
-    DAYS.forEach(day => {
-        html += `<tr><td class="day-cell">${day}</td>`;
-        
-        uniqueTimeSlots.forEach(timeSlot => {
-            // Find all classes for this day and time (there should be only one)
-            const classes = data.filter(item => 
-                item.day === day && 
-                item.time === timeSlot
-            );
-
-            if (classes.length > 0) {
-                // Should only be one class per time slot
-                const classData = classes[0];
-                const classType = classData.type.toLowerCase();
-                html += `
-                    <td class="class-cell ${classType}">
-                        <div class="class-info">
-                            <div class="subject">${classData.subject || 'N/A'}</div>
-                            <div class="room-teacher">
-                                ${classData.room || 'Room'} | ${classData.teacher || 'Teacher'}
-                            </div>
-                            <div class="batch-tag">${classData.type.charAt(0)}</div>
+            // Create timetable HTML
+            let html = `
+                <div class="timetable-container">
+                    <h2 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">
+                        📅 Timetable for Batch ${selectedBatch}
+                    </h2>
+                    
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color lecture"></div>
+                            <span>Lecture</span>
                         </div>
-                    </td>
-                `;
-            } else {
-                html += '<td class="empty-cell">-</td>';
-            }
-        });
-        
-        html += '</tr>';
-    });
+                        <div class="legend-item">
+                            <div class="legend-color tutorial"></div>
+                            <span>Tutorial</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color practical"></div>
+                            <span>Practical</span>
+                        </div>
+                    </div>
 
-    html += '</tbody></table></div>';
-    content.innerHTML = html;
-}
+                    <table class="timetable">
+                        <thead>
+                            <tr>
+                                <th>Day</th>
+            `;
+
+            // Add time slot headers - use the actual time slots found in data
+            const uniqueTimeSlots = [...new Set(data.map(item => item.originalTime))];
+            const sortedTimeSlots = uniqueTimeSlots.length > 0 ? uniqueTimeSlots : TIME_SLOTS;
+            
+            sortedTimeSlots.forEach(time => {
+                html += `<th>${time}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            // Add timetable rows for each day
+            DAYS.forEach(day => {
+                html += `<tr><td class="day-cell">${day}</td>`;
+                
+                sortedTimeSlots.forEach(timeSlot => {
+                    // Find class for this day and time
+                    const classData = data.find(item => 
+                        item.day === day && 
+                        (item.originalTime === timeSlot || 
+                         item.time === timeSlot ||
+                         timeSlot.includes(item.time.split('-')[0]) ||
+                         item.time.includes(timeSlot.split('-')[0]))
+                    );
+
+                    if (classData) {
+                        const classType = classData.type.toLowerCase();
+                        html += `
+                            <td class="class-cell ${classType}" title="${classData.originalString || ''}">
+                                <div class="class-info">
+                                    <div class="subject">${classData.subject || 'N/A'}</div>
+                                    <div class="room-teacher">${classData.room || 'Room'} | ${classData.teacher || 'Teacher'}</div>
+                                    <div class="batch-tag">${classData.type.charAt(0)}</div>
+                                </div>
+                            </td>
+                        `;
+                    } else {
+                        html += '<td class="empty-cell">-</td>';
+                    }
+                });
+                
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            
+            // Add debug information if enabled
+            if (debugMode && data.length > 0) {
+                html += `
+                    <div class="debug-info">
+                        <h4>Debug Information</h4>
+                        <p><strong>Total classes found:</strong> ${data.length}</p>
+                        <p><strong>Days with classes:</strong> ${[...new Set(data.map(d => d.day))].join(', ')}</p>
+                        <p><strong>Time slots used:</strong> ${[...new Set(data.map(d => d.originalTime))].join(', ')}</p>
+                        <details>
+                            <summary>All parsed classes</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            content.innerHTML = html;
+        }
+
         function displayDebugInfo(worksheet, selectedBatch) {
             const content = document.getElementById('content');
             
@@ -812,8 +816,8 @@ function parseClassString(classStr, selectedBatch) {
             console.log('Example: Sector62_IV_Sem_2025.xlsx');
             
             // Add debug mode toggle
-            // const header = document.querySelector('.header p');
-            // header.innerHTML += '<br><small>Debug mode: ' + (debugMode ? 'ON' : 'OFF') + '</small>';
+            const header = document.querySelector('.header p');
+            header.innerHTML += '<br><small>Debug mode: ' + (debugMode ? 'ON' : 'OFF') + '</small>';
         });
     </script>
 </body>
